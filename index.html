@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Melody with Sawtooth Wave + Volume & Reverb</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.41/Tone.min.js"></script>
+<style>
+body { font-family: sans-serif; padding: 20px; }
+.controls { margin-top: 20px; }
+.controls label { margin-right: 10px; }
+</style>
+</head>
+<body>
+
+<button id="playButton">Play Melody</button>
+<button id="stopButton">Stop Melody</button>
+
+<div class="controls">
+  <label for="volumeSlider">Melody 01 Volume: <span id="volumeValue">0.5</span></label>
+  <input type="range" id="volumeSlider" min="0" max="1" step="0.01" value="0.5">
+</div>
+
+<script>
+const bpm = 140;
+const quarter = 60 / bpm;        
+const eighth = quarter / 2;      
+const sixteenth = eighth / 2;    
+
+// Melody
+const melody = [
+  { note: "Ab4", duration: eighth },
+  { note: "G4", duration: eighth },
+  { note: null, duration: eighth },
+  { note: "Ab4", duration: eighth },
+  { note: "G4", duration: eighth },
+  { note: "G3", duration: eighth },
+  { note: "G3", duration: sixteenth },
+  { note: "G3", duration: sixteenth },
+  { note: "G3", duration: eighth },
+  { note: "Ab3", duration: eighth },
+  { note: "G3", duration: eighth },
+  { note: null, duration: quarter * 3 }
+];
+
+// --- MELODY 01 VOLUME ---
+const master = new Tone.Gain(0.5).toDestination();
+
+// --- REVERB ---
+const reverb = new Tone.Reverb({
+  decay: 3,
+  preDelay: 0.1,
+  wet: 0.5
+}).connect(master);
+
+reverb.generate(); // Precompute the reverb impulse
+
+// --- SINGLE SYNTH ---
+const synth = new Tone.Synth({
+  oscillator: { type: "sawtooth" },
+  envelope: { attack: 0.01, decay: 0.1, sustain: 0.5, release: 0.1 }
+}).connect(reverb);
+
+// Convert note to frequency
+function noteToFreq(note) {
+  return Tone.Frequency(note).toFrequency();
+}
+
+let stopFlag = false;
+
+async function playMelody() {
+  await Tone.start();
+  stopFlag = false;
+  let time = 0;
+
+  melody.forEach((item) => {
+    if (stopFlag) return;
+
+    // Schedule note
+    if(item.note) {
+      const freq = noteToFreq(item.note);
+      Tone.Transport.scheduleOnce((t) => {
+        if (!stopFlag) synth.triggerAttackRelease(freq, item.duration, t);
+      }, `+${time}`);
+    }
+
+    time += item.duration;
+  });
+
+  // Schedule next loop
+  Tone.Transport.scheduleOnce(() => {
+    if (!stopFlag) playMelody();
+  }, `+${time}`);
+
+  Tone.Transport.start();
+}
+
+function stopMelody() {
+  stopFlag = true;
+  Tone.Transport.stop();
+}
+
+// --- VOLUME CONTROL ---
+const volumeSlider = document.getElementById("volumeSlider");
+const volumeValue = document.getElementById("volumeValue");
+volumeSlider.addEventListener("input", () => {
+  const vol = parseFloat(volumeSlider.value);
+  volumeValue.textContent = vol.toFixed(2);
+  master.gain.value = vol;
+});
+
+document.getElementById("playButton").addEventListener("click", playMelody);
+document.getElementById("stopButton").addEventListener("click", stopMelody);
+</script>
+</body>
+</html>
