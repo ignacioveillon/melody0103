@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Melody with Sawtooth Wave + Volume & Reverb</title>
+<title>Melody 01 (140 BPM)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.41/Tone.min.js"></script>
 <style>
 body { font-family: sans-serif; padding: 20px; }
@@ -43,7 +43,7 @@ const melody = [
   { note: null, duration: quarter * 3 }
 ];
 
-// --- MELODY 01 VOLUME ---
+// --- MASTER VOLUME ---
 const master = new Tone.Gain(0.5).toDestination();
 
 // --- REVERB ---
@@ -53,9 +53,9 @@ const reverb = new Tone.Reverb({
   wet: 0.5
 }).connect(master);
 
-reverb.generate(); // Precompute the reverb impulse
+reverb.generate(); // Precompute the impulse
 
-// --- SINGLE SYNTH ---
+// --- SYNTH ---
 const synth = new Tone.Synth({
   oscillator: { type: "sawtooth" },
   envelope: { attack: 0.01, decay: 0.1, sustain: 0.5, release: 0.1 }
@@ -66,37 +66,40 @@ function noteToFreq(note) {
   return Tone.Frequency(note).toFrequency();
 }
 
+// --- LOOP SETUP ---
+let loop;
 let stopFlag = false;
 
 async function playMelody() {
   await Tone.start();
   stopFlag = false;
-  let time = 0;
+  Tone.Transport.bpm.value = bpm;
 
-  melody.forEach((item) => {
-    if (stopFlag) return;
+  // Cancel any previous loop
+  if (loop) loop.dispose();
 
-    // Schedule note
-    if(item.note) {
-      const freq = noteToFreq(item.note);
-      Tone.Transport.scheduleOnce((t) => {
-        if (!stopFlag) synth.triggerAttackRelease(freq, item.duration, t);
-      }, `+${time}`);
-    }
+  // Total duration of the melody
+  const totalDuration = melody.reduce((sum, item) => sum + item.duration, 0);
 
-    time += item.duration;
-  });
+  // Create a loop that triggers each note at the correct time
+  loop = new Tone.Loop((time) => {
+    let noteTime = time;
 
-  // Schedule next loop
-  Tone.Transport.scheduleOnce(() => {
-    if (!stopFlag) playMelody();
-  }, `+${time}`);
+    melody.forEach(item => {
+      if (item.note) {
+        synth.triggerAttackRelease(item.note, item.duration, noteTime);
+      }
+      noteTime += item.duration;
+    });
+  }, totalDuration);
 
+  loop.start(0);
   Tone.Transport.start();
 }
 
 function stopMelody() {
   stopFlag = true;
+  if (loop) loop.stop();
   Tone.Transport.stop();
 }
 
@@ -109,6 +112,7 @@ volumeSlider.addEventListener("input", () => {
   master.gain.value = vol;
 });
 
+// --- BUTTON EVENTS ---
 document.getElementById("playButton").addEventListener("click", playMelody);
 document.getElementById("stopButton").addEventListener("click", stopMelody);
 </script>
